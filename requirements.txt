@@ -1,0 +1,17 @@
+
+streamlit
+python-dotenv
+requests
+beautifulsoup4
+lxml
+playwright
+pypdf
+sentence-transformers
+faiss-cpu
+langchain
+langchain-community
+langchain-core
+langchain-text-splitters
+langchain-huggingface
+langchain-openai
+rank-bm25
