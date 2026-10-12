@@ -62,16 +62,13 @@ def search_keywords(question: str, k: int = 3) -> list[dict]:
 
 
 if __name__ == "__main__":
-    question = "Which scheme provides basic infrastructure facilities in rural habitations?"
+    question = "Which scheme improves village roads and rural connectivity?"
 
-    print(f"Question: {question}")
+    results = search_keywords(question, k=5)
 
-    for rank, result in enumerate(
-        search_keywords(question, k=3), start=1
-    ):
+    for rank, result in enumerate(results, start=1):
         print(f"\nResult {rank}")
-        print(f"Scheme: {result['scheme_name']}")
-        print(f"BM25 score: {result['bm25_score']:.4f}")
-        print(f"Source: {result['source_url']}")
-        print(f"Content: {result['content'][:350]}")
-        print("-" * 60)
+        print("Scheme:", result["scheme_name"])
+        print("BM25 score:", round(result["bm25_score"], 4))
+        print("Content:", result["content"][:180])
+        print("-" * 50)

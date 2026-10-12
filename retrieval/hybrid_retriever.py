@@ -1,6 +1,7 @@
 
 from retrieval.vector_retriever import search_schemes
 from retrieval.keyword_retriever import search_keywords
+from retrieval.query_translator import translate_query_to_english
 
 
 def reciprocal_rank_fusion(
@@ -61,8 +62,9 @@ def search_hybrid(question: str, limit: int = 5):
     if limit < 1:
         raise ValueError("limit must be at least 1.")
 
-    vector_results = search_schemes(question, k=limit * 3)
-    keyword_results = search_keywords(question, k=limit * 3)
+    search_question = translate_query_to_english(question)
+    vector_results = search_schemes(search_question, k=limit * 3)
+    keyword_results = search_keywords(search_question, k=limit * 3)
 
     fused_results = reciprocal_rank_fusion(
         vector_results,
