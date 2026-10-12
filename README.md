@@ -1,112 +1,112 @@
 # Tamil Nadu Government Schemes Multi-RAG AI
 
-## Overview
-
-A Retrieval-Augmented Generation (RAG) application that answers questions about Tamil Nadu government rural development schemes using locally stored and indexed scheme documents.
-
-The application combines semantic search with keyword search to retrieve relevant information and uses an OpenAI language model to generate answers grounded in the retrieved context.
+A Streamlit-based AI application that answers questions about Tamil Nadu rural development schemes using locally indexed government documents, hybrid retrieval, and an interactive Knowledge Graph.
 
 ## Features
 
-- Ingest scheme information from official Tamil Nadu Rural Development and Panchayat Raj (TNRD) web pages.
-- Clean and split documents into searchable chunks.
-- Generate embeddings using `sentence-transformers/all-MiniLM-L6-v2`.
-- Store and search document embeddings using FAISS.
-- Combine semantic and keyword retrieval using Reciprocal Rank Fusion (RRF).
-- Generate context-grounded answers using OpenAI through LangChain.
-- Display answers, retrieved schemes, and source links in Streamlit.
-- Use `.env` for local API-key configuration.
+- **Document ingestion:** Collects and cleans scheme information from official government sources.
+- **Vector search:** Uses FAISS and local sentence-transformer embeddings.
+- **Keyword search:** Uses BM25 to find relevant passages.
+- **Hybrid retrieval:** Combines vector and keyword rankings using Reciprocal Rank Fusion.
+- **Tamil and English queries:** Translates queries where needed to improve cross-language retrieval.
+- **Answer generation:** Uses OpenAI to generate answers grounded in retrieved document content.
+- **Knowledge Graph:** Uses NetworkX to build relationships between schemes and infrastructure categories.
+- **Interactive visualization:** Uses PyVis to explore graph relationships in Streamlit.
+- **Automated tests:** Tests retrieval quality, answer generation, graph integrity, and the RAG pipeline.
 
 ## Technology Stack
 
-- Python
-- LangChain
+- Python 3.12
 - Streamlit
-- FAISS
-- Hugging Face Sentence Transformers
-- BM25 keyword retrieval
+- LangChain
 - OpenAI
-- Python dotenv
+- FAISS
+- Sentence Transformers
+- BM25
+- NetworkX
+- PyVis
+- pytest
 
 ## Project Structure
 
-- `ingestion/` — Collect scheme information.
-- `documents/` — Clean documents and split them into chunks.
-- `vectorstore/` — Build the FAISS index.
-- `retrieval/` — Semantic, keyword, hybrid retrieval, and RAG pipeline.
-- `generation/` — Prompt template and answer generation.
-- `ui/` — Streamlit application.
-- `config/` — Configuration files.
-- `data/raw/` — Raw source data.
-- `data/processed/` — Cleaned documents and chunks.
-- `data/faiss/` — Locally generated FAISS index.
-- `tests/` — Automated tests.
+```text
+tnschememulti_rag/
+├── config/
+├── data/
+│   ├── raw/
+│   ├── processed/
+│   └── faiss/
+├── documents/
+├── embeddings/
+├── generation/
+├── graph/
+├── guardrails/
+├── ingestion/
+├── retrieval/
+├── tests/
+├── ui/
+├── vectorstore/
+├── .env
+├── .gitignore
+└── README.md
+```
 
 ## Setup
 
-### 1. Create and activate a virtual environment
-
-On Windows PowerShell:
+Create and activate a virtual environment:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-### 2. Install dependencies
+Install the project dependencies:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-### 3. Configure the API key
-
-Create a local `.env` file in the project root:
+Create a `.env` file in the project root and configure your OpenAI API key:
 
 ```text
-OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_API_KEY=your_api_key_here
 ```
 
-Replace the placeholder with your own API key. Never commit `.env` or share the key publicly.
+Never commit your real API key to GitHub.
 
-### 4. Prepare the scheme data
+## Run the Application
 
-Run the ingestion, cleaning, chunking, and FAISS-building scripts in their intended order. The generated local data and vector index are excluded from Git and may need to be regenerated after cloning.
-
-### 5. Start the application
-
-From the project root, run:
+Start Streamlit from the project root:
 
 ```powershell
 python -m streamlit run ui/app.py
 ```
 
-Open the local URL displayed in the terminal, usually `http://localhost:8501`.
+Open the local URL printed in the terminal, usually `http://localhost:8501`.
 
-## How It Works
+Use the **Ask a question** tab to ask about schemes. Use the **Knowledge Graph** tab to explore scheme relationships and inspect source documents.
 
-1. The user enters a question in Streamlit.
-2. FAISS retrieves semantically similar document chunks.
-3. BM25 retrieves keyword-matching chunks.
-4. Reciprocal Rank Fusion combines the retrieval results.
-5. Retrieved content is passed to the LangChain prompt.
-6. The OpenAI model generates an answer based on the supplied context.
-7. The UI displays the answer, retrieved schemes, and source URLs.
+## Rebuild Data and Indexes
 
-## Limitations
+Run the project's ingestion, cleaning, chunking, and indexing scripts in the appropriate order when refreshing source data. Build the graph with:
 
-- Answers depend on the coverage and quality of the ingested documents.
-- Generated answers may be incomplete; verify important eligibility, benefit, and application details with the relevant government department.
-- The local vector index must be built before retrieval can work.
-- This project does not guarantee that a scheme is currently active.
+```powershell
+python graph/build_graph.py
+```
 
-## Security
+The graph is saved to `data/processed/scheme_graph.json`.
 
-- Keep API keys in `.env`.
-- Keep `.env` out of Git.
-- Commit `.env.example` only if it contains placeholders and no real credentials.
-- Do not commit generated indexes or private credentials.
+## Run Tests
 
-## Disclaimer
+```powershell
+python -m pytest tests -v -o addopts="" -p no:cacheprovider
+```
 
-This application is an informational aid. Consult official government sources for authoritative and up-to-date scheme information.
+The current test suite contains 10 passing tests.
+
+## Important Limitations
+
+- Answers depend on the available indexed source documents.
+- Graph relationships currently indicate infrastructure categories mentioned in scheme text; they do not independently establish funding, eligibility, or current scheme status.
+- Verify important eligibility and application details with the relevant government department.
+- The graph is stored locally as JSON and uses NetworkX; this implementation does not require a Neo4j server.
