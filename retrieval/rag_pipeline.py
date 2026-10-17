@@ -7,7 +7,12 @@ from retrieval.hybrid_retriever import search_hybrid
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-GRAPH_FILE = ROOT_DIR / "data" / "processed" / "scheme_graph.json"
+GRAPH_FILE = (
+    ROOT_DIR
+    / "data"
+    / "processed"
+    / "tn_agriculture_scheme_graph.json"
+)
 
 
 def get_graph_insights(scheme_names=None):
@@ -35,7 +40,6 @@ def get_graph_insights(scheme_names=None):
         source_name = source.get("label", edge["source"])
         target_name = target.get("label", edge["target"])
 
-        # Show relationships for retrieved schemes when available.
         if selected_names and (
             source_name.strip().casefold() not in selected_names
             and target_name.strip().casefold() not in selected_names
@@ -60,13 +64,49 @@ def get_graph_insights(scheme_names=None):
     return "\n".join(insights)
 
 
-def ask_scheme_question(question: str, limit: int = 5) -> dict:
-    """Retrieve document evidence, add local graph insights, and answer."""
+def format_chat_history(chat_history, max_turns=4):
+    """Format recent messages to help interpret follow-up questions."""
+
+    if not chat_history:
+        return "No previous conversation."
+
+    # Keep only the most recent messages.
+    recent_messages = chat_history[-(max_turns * 2):]
+
+    lines = []
+    for message in recent_messages:
+        role = message.get("role", "user")
+        content = message.get("content", "")
+
+        if role in ("user", "assistant") and content:
+            lines.append(f"{role.capitalize()}: {content}")
+
+    return "\n".join(lines) or "No previous conversation."
+
+
+def ask_scheme_question(
+    question: str,
+    limit: int = 5,
+    chat_history=None,
+) -> dict:
+    """Retrieve evidence and answer using recent conversation context."""
 
     if not question or not question.strip():
         raise ValueError("Please enter a question.")
 
-    results = search_hybrid(question, limit=limit)
+    history_text = format_chat_history(chat_history)
+
+    # Search with the current question and recent conversation context.
+    # This helps keyword and semantic retrieval with short follow-ups.
+    retrieval_query = question.strip()
+
+    if chat_history:
+        retrieval_query = (
+            f"Recent conversation:\n{history_text}\n\n"
+            f"Current question:\n{question.strip()}"
+        )
+
+    results = search_hybrid(retrieval_query, limit=limit)
 
     retrieved_schemes = [
         result["scheme_name"]
@@ -76,8 +116,10 @@ def ask_scheme_question(question: str, limit: int = 5) -> dict:
     graph_answer = get_graph_insights(retrieved_schemes)
 
     context_parts = [
-        "Knowledge Graph relationships:\n" + graph_answer
+        "Recent conversation:\n" + history_text,
+        "Knowledge Graph relationships:\n" + graph_answer,
     ]
+
     sources = []
 
     for result in results:
@@ -113,6 +155,7 @@ def ask_scheme_question(question: str, limit: int = 5) -> dict:
         "question": question,
         "answer": answer,
         "graph_answer": graph_answer,
+        "context": context,
         "sources": sources,
         "retrieved_schemes": retrieved_schemes,
     }

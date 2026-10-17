@@ -3,10 +3,16 @@ import json
 import re
 from pathlib import Path
 
+import streamlit as st
 from rank_bm25 import BM25Okapi
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CHUNKS_FILE = PROJECT_ROOT / "data" / "processed" / "scheme_chunks.json"
+CHUNKS_FILE = (
+    PROJECT_ROOT
+    / "data"
+    / "processed"
+    / "tn_agriculture_scheme_chunks.json"
+)
 
 
 def tokenize(text: str) -> list[str]:
@@ -14,8 +20,9 @@ def tokenize(text: str) -> list[str]:
     return re.findall(r"\b\w+\b", text.lower())
 
 
+@st.cache_resource
 def load_chunks() -> list[dict]:
-    """Load the existing scheme chunks."""
+    """Load and cache the existing scheme chunks."""
     if not CHUNKS_FILE.exists():
         raise FileNotFoundError(
             f"Chunks file not found: {CHUNKS_FILE}"
@@ -29,6 +36,18 @@ def load_chunks() -> list[dict]:
     return chunks
 
 
+@st.cache_resource
+def load_bm25():
+    """Build and cache the BM25 keyword index."""
+    chunks = load_chunks()
+
+    tokenized_chunks = [
+        tokenize(chunk["content"]) for chunk in chunks
+    ]
+
+    return BM25Okapi(tokenized_chunks)
+
+
 def search_keywords(question: str, k: int = 3) -> list[dict]:
     """Return scheme chunks ranked by BM25 keyword relevance."""
     if not question or not question.strip():
@@ -38,11 +57,7 @@ def search_keywords(question: str, k: int = 3) -> list[dict]:
         raise ValueError("k must be at least 1.")
 
     chunks = load_chunks()
-    tokenized_chunks = [
-        tokenize(chunk["content"]) for chunk in chunks
-    ]
-
-    bm25 = BM25Okapi(tokenized_chunks)
+    bm25 = load_bm25()
     scores = bm25.get_scores(tokenize(question))
 
     ranked_indices = sorted(

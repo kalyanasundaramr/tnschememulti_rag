@@ -37,45 +37,80 @@ with st.sidebar:
         "with the relevant government department."
     )
 
+
 tab1, tab2 = st.tabs(["Ask a question", "Knowledge Graph"])
 
 with tab1:
-    question = st.text_area(
-        "Enter your question",
-        placeholder="Example: Which scheme improves village roads?",
-        height=100,
+    # Initialise chat history once per user session.
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Provide a button to clear the conversation.
+    if st.button("Clear chat"):
+        st.session_state.messages = []
+        st.rerun()
+
+    # Display previous questions and answers.
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Accept a new question.
+    question = st.chat_input(
+        "Ask about Tamil Nadu government schemes..."
     )
 
-    if st.button("Find scheme information", type="primary"):
-        if not question.strip():
-            st.warning("Please enter a question.")
-        else:
-            with st.spinner("Searching scheme documents and generating an answer..."):
+    if question:
+        # Display and save the user's question.
+        st.session_state.messages.append(
+            {"role": "user", "content": question}
+        )
+
+        with st.chat_message("user"):
+            st.markdown(question)
+
+        # Generate the answer using your existing RAG pipeline.
+        with st.chat_message("assistant"):
+            with st.spinner(
+                "Searching scheme documents and generating an answer..."
+            ):
                 try:
-                    result = ask_scheme_question(question.strip())
+                    # Exclude the current question, which was just added to history.
+                    previous_messages = st.session_state.messages[:-1]
+                    result = ask_scheme_question(
+                question.strip(),
+                chat_history=previous_messages,
+            )
 
-                    st.subheader("Answer")
-                    st.markdown(result["answer"])
+                    answer = result["answer"]
+                    st.markdown(answer)
 
-                    st.subheader("Retrieved schemes")
-                    for scheme in result["retrieved_schemes"]:
-                        st.write(f"- {scheme}")
+                    if result.get("retrieved_schemes"):
+                        with st.expander("Retrieved schemes"):
+                            for scheme in result["retrieved_schemes"]:
+                                st.write(f"- {scheme}")
 
-                    st.subheader("Source documents")
-                    for source in result["sources"]:
-                        st.markdown(f"- [{source}]({source})")
+                    if result.get("sources"):
+                        with st.expander("Source documents"):
+                            for source in result["sources"]:
+                                st.markdown(f"- [{source}]({source})")
 
-                except Exception:
+                    # Save the assistant's answer.
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": answer}
+                    )
+
+                except Exception as exc:
                     st.error(
                         "Unable to answer this question. "
                         "Check your API configuration and project logs."
                     )
-                    st.exception(None)
+                    st.exception(exc)
 
 with tab2:
     st.subheader("Explore scheme relationships")
     st.write(
-        "Blue nodes represent schemes. Green nodes represent infrastructure "
+        "Blue nodes represent schemes. Green nodes represent "
         "categories mentioned in the source documents."
     )
 

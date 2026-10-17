@@ -1,28 +1,42 @@
 
+import streamlit as st
 from pathlib import Path
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-INDEX_DIR = PROJECT_ROOT / "data" / "faiss" / "tnrd_schemes"
+INDEX_DIR = (
+    PROJECT_ROOT
+    / "data"
+    / "faiss"
+    / "tn_agriculture_schemes"
+)
+
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 
+@st.cache_resource
+def load_embeddings():
+    """Load and cache the embedding model."""
+    return HuggingFaceEmbeddings(
+        model_name=MODEL_NAME,
+        model_kwargs={"device": "cpu"},
+        encode_kwargs={"normalize_embeddings": True},
+    )
+
+
+@st.cache_resource
 def load_vectorstore():
-    """Load the locally saved FAISS index."""
+    """Load and cache the locally saved FAISS index."""
     if not (INDEX_DIR / "index.faiss").exists():
         raise FileNotFoundError(
             f"FAISS index not found at {INDEX_DIR}. "
             "Run vectorstore/build_faiss.py first."
         )
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name=MODEL_NAME,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True},
-    )
+    embeddings = load_embeddings()
 
     return FAISS.load_local(
         str(INDEX_DIR),
@@ -44,7 +58,7 @@ def search_schemes(question: str, k: int = 3):
 
 
 if __name__ == "__main__":
-    question = "Which scheme provides basic infrastructure facilities in rural habitations?"
+    question = "Which schemes provide subsidies to farmers, and what benefits do they offer?"
 
     results = search_schemes(question, k=3)
 

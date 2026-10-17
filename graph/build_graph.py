@@ -1,86 +1,190 @@
 
 import json
-import re
+import os
 from pathlib import Path
 
 import networkx as nx
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-INPUT_FILE = ROOT_DIR / "data" / "processed" / "tnrd_schemes_clean.json"
-OUTPUT_FILE = ROOT_DIR / "data" / "processed" / "scheme_graph.json"
+
+INPUT_FILE = (
+    ROOT_DIR
+    / "data"
+    / "processed"
+    / "tn_agriculture_schemes_clean.json"
+)
+
+OUTPUT_FILE = (
+    ROOT_DIR
+    / "data"
+    / "processed"
+    / "tn_agriculture_scheme_graph.json"
+)
+
+load_dotenv()
 
 
-# Infrastructure categories used only when their terms occur in source text.
-INFRASTRUCTURE_TERMS = {
-    "Water Supply": ["water supply", "drinking water", "water pipeline"],
-    "Rural Roads": ["rural roads", "village roads", "cement concrete roads"],
-    "Street Lights": ["street lights", "streetlights"],
-    "Burial Grounds": ["burial grounds"],
-    "Anganwadi Centres": ["anganwadi centres", "anganwadi centers"],
-    "Public Distribution Shops": [
-        "public distribution system shops",
-        "pds shops",
-    ],
-    "Self Help Group Buildings": ["shg buildings", "self help group buildings"],
-    "Playgrounds": ["play ground", "playgrounds"],
-    "Drainage": ["drainage", "drains"],
-    "Sanitation": ["sanitation", "toilets"],
-}
+class GraphRelationship(BaseModel):
+    source_entity: str = Field(
+        description="Name of the source entity"
+    )
+    source_type: str = Field(
+        description="scheme, department, beneficiary, benefit, crop, or component"
+    )
+    relationship: str = Field(
+        description="Short relationship label supported by the source"
+    )
+    target_entity: str = Field(
+        description="Name of the target entity"
+    )
+    target_type: str = Field(
+        description="scheme, department, beneficiary, benefit, crop, or component"
+    )
+    evidence: str = Field(
+        description="Brief supporting text copied or closely paraphrased from the scheme"
+    )
 
 
-def contains_term(text, terms):
-    text = text.lower()
-    return any(term in text for term in terms)
+class SchemeGraphExtraction(BaseModel):
+    relationships: list[GraphRelationship] = Field(
+        description="Relationships explicitly supported by the scheme content"
+    )
 
 
 def build_graph():
     if not INPUT_FILE.exists():
         raise FileNotFoundError(
-            f"Scheme data not found: {INPUT_FILE}"
+            f"Agriculture scheme data not found: {INPUT_FILE}"
         )
 
-    records = json.loads(INPUT_FILE.read_text(encoding="utf-8"))
-    graph = nx.Graph()
+    if not os.getenv("OPENAI_API_KEY"):
+        raise ValueError(
+            "OPENAI_API_KEY is missing. Add it to your .env file."
+        )
 
-    for record in records:
-        name = record.get("scheme_name", "").strip()
+    records = json.loads(
+        INPUT_FILE.read_text(encoding="utf-8")
+    )
+
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0,
+    ).with_structured_output(SchemeGraphExtraction)
+
+    graph = nx.MultiDiGraph()
+    processed = 0
+    failed = 0
+
+    for index, record in enumerate(records, start=1):
+        scheme_name = record.get("scheme_name", "").strip()
         content = record.get("content", "").strip()
-        source_url = record.get("source_url", "").strip()
 
-        if not name:
+        if not scheme_name or not content:
             continue
 
-        scheme_id = f"scheme::{name}"
+        department = record.get("department", "").strip()
+        source_url = record.get("source_url", "").strip()
+
+        # Add the scheme node from the source data.
+        scheme_id = f"scheme::{scheme_name.casefold()}"
 
         graph.add_node(
             scheme_id,
-            label=name,
+            label=scheme_name,
             node_type="scheme",
             source_url=source_url,
         )
 
-        # Add only infrastructure categories explicitly mentioned
-        # in this scheme's source text.
-        for category, terms in INFRASTRUCTURE_TERMS.items():
-            if contains_term(content, terms):
-                category_id = f"infrastructure::{category}"
+        # Add the department directly when the source identifies it.
+        if department:
+            department_id = f"department::{department.casefold()}"
+
+            graph.add_node(
+                department_id,
+                label=department,
+                node_type="department",
+            )
+
+            graph.add_edge(
+                scheme_id,
+                department_id,
+                relationship="administered_by",
+                evidence=f"Department: {department}",
+                source_url=source_url,
+            )
+
+        prompt = f"""
+Extract factual entities and relationships from this Tamil Nadu
+agriculture scheme record.
+
+Return only relationships supported by the provided text.
+Do not invent eligibility rules, beneficiaries, benefits, or amounts.
+Preserve entity names and details in the language used in the source.
+If the record does not support a relationship, return an empty list.
+
+Scheme name: {scheme_name}
+Department: {department}
+Source URL: {source_url}
+
+Scheme content:
+{content[:12000]}
+"""
+
+        try:
+            extraction = llm.invoke(prompt)
+
+            for item in extraction.relationships:
+                source_name = item.source_entity.strip()
+                target_name = item.target_entity.strip()
+                relationship = item.relationship.strip()
+
+                if not source_name or not target_name or not relationship:
+                    continue
+
+                source_id = (
+                    f"{item.source_type.strip().casefold()}::"
+                    f"{source_name.casefold()}"
+                )
+                target_id = (
+                    f"{item.target_type.strip().casefold()}::"
+                    f"{target_name.casefold()}"
+                )
 
                 graph.add_node(
-                    category_id,
-                    label=category,
-                    node_type="infrastructure",
+                    source_id,
+                    label=source_name,
+                    node_type=item.source_type.strip().casefold(),
+                )
+                graph.add_node(
+                    target_id,
+                    label=target_name,
+                    node_type=item.target_type.strip().casefold(),
                 )
 
                 graph.add_edge(
-                    scheme_id,
-                    category_id,
-                    relationship="mentions_infrastructure",
-                    evidence=", ".join(
-                        term for term in terms
-                        if term in content.lower()
-                    ),
+                    source_id,
+                    target_id,
+                    relationship=relationship,
+                    evidence=item.evidence.strip(),
+                    source_url=source_url,
+                    scheme=scheme_name,
                 )
+
+            processed += 1
+            print(
+                f"[{index}/{len(records)}] Processed: {scheme_name}"
+            )
+
+        except Exception as exc:
+            failed += 1
+            print(
+                f"[{index}/{len(records)}] Failed: "
+                f"{scheme_name} — {exc}"
+            )
 
     nodes = [
         {"id": node_id, **attributes}
@@ -93,6 +197,7 @@ def build_graph():
     ]
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+
     OUTPUT_FILE.write_text(
         json.dumps(
             {"nodes": nodes, "edges": edges},
@@ -102,19 +207,13 @@ def build_graph():
         encoding="utf-8",
     )
 
-    print("Knowledge Graph created successfully.")
-    print(f"Source schemes: {len(records)}")
+    print("\nAgriculture Knowledge Graph build complete.")
+    print(f"Input scheme records: {len(records)}")
+    print(f"Records processed: {processed}")
+    print(f"Records failed: {failed}")
     print(f"Graph nodes: {graph.number_of_nodes()}")
     print(f"Graph edges: {graph.number_of_edges()}")
     print(f"Output: {OUTPUT_FILE}")
-
-    print("\nSample relationships:")
-    for source, target, attributes in list(graph.edges(data=True))[:10]:
-        print(
-            f"- {graph.nodes[source]['label']} "
-            f"--[{attributes['relationship']}]--> "
-            f"{graph.nodes[target]['label']}"
-        )
 
 
 if __name__ == "__main__":
