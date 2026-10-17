@@ -1,18 +1,22 @@
 # Tamil Nadu Government Schemes Multi-RAG AI
 
-A Streamlit-based AI application that answers questions about Tamil Nadu rural development schemes using locally indexed government documents, hybrid retrieval, and an interactive Knowledge Graph.
+A Streamlit-based AI application that answers questions about **Tamil Nadu Agriculture schemes** using official government scheme data, hybrid retrieval, conversational context, and an interactive Knowledge Graph. The application supports Tamil and English queries and generates answers grounded in retrieved source content.
 
 ## Features
 
-- **Document ingestion:** Collects and cleans scheme information from official government sources.
-- **Vector search:** Uses FAISS and local sentence-transformer embeddings.
-- **Keyword search:** Uses BM25 to find relevant passages.
+- **Agriculture scheme ingestion:** Retrieves scheme data from the Tamil Nadu Agriculture API. Collected 77 unique active schemes across 103 active classes checked.
+- **Data processing:** Cleans and combines Tamil and English scheme information and generates 197 text chunks.
+- **Vector search:** Uses FAISS and local Sentence Transformer embeddings.
+- **Keyword search:** Uses BM25 to identify relevant scheme passages.
 - **Hybrid retrieval:** Combines vector and keyword rankings using Reciprocal Rank Fusion.
-- **Tamil and English queries:** Translates queries where needed to improve cross-language retrieval.
-- **Answer generation:** Uses OpenAI to generate answers grounded in retrieved document content.
-- **Knowledge Graph:** Uses NetworkX to build relationships between schemes and infrastructure categories.
-- **Interactive visualization:** Uses PyVis to explore graph relationships in Streamlit.
-- **Automated tests:** Tests retrieval quality, answer generation, graph integrity, and the RAG pipeline.
+- **Tamil and English support:** Supports cross-language retrieval and responses in the user's query language.
+- **Conversational chat history:** Maintains recent conversation context for follow-up questions and provides a clear-chat option.
+- **Answer generation:** Uses OpenAI to generate answers grounded in retrieved scheme information.
+- **LLM-based Knowledge Graph:** Uses structured LLM extraction and NetworkX to represent relationships involving schemes, beneficiaries, departments, and benefits.
+- **Interactive visualization:** Uses PyVis to explore scheme relationships in Streamlit.
+- **Retrieval evaluation:** Measures Hit-rate@5 and Mean Reciprocal Rank (MRR).
+- **Faithfulness evaluation:** Uses RAGAS to assess whether generated answers are supported by retrieved context.
+- **Automated tests:** Tests retrieval, answer generation, graph integrity, and the RAG pipeline.
 
 ## Technology Stack
 
@@ -25,6 +29,8 @@ A Streamlit-based AI application that answers questions about Tamil Nadu rural d
 - BM25
 - NetworkX
 - PyVis
+- Pydantic
+- RAGAS
 - pytest
 
 ## Project Structure
@@ -35,78 +41,4 @@ tnschememulti_rag/
 ├── data/
 │   ├── raw/
 │   ├── processed/
-│   └── faiss/
-├── documents/
-├── embeddings/
-├── generation/
-├── graph/
-├── guardrails/
-├── ingestion/
-├── retrieval/
-├── tests/
-├── ui/
-├── vectorstore/
-├── .env
-├── .gitignore
-└── README.md
-```
-
-## Setup
-
-Create and activate a virtual environment:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-Install the project dependencies:
-
-```powershell
-python -m pip install -r requirements.txt
-```
-
-Create a `.env` file in the project root and configure your OpenAI API key:
-
-```text
-OPENAI_API_KEY=your_api_key_here
-```
-
-Never commit your real API key to GitHub.
-
-## Run the Application
-
-Start Streamlit from the project root:
-
-```powershell
-python -m streamlit run ui/app.py
-```
-
-Open the local URL printed in the terminal, usually `http://localhost:8501`.
-
-Use the **Ask a question** tab to ask about schemes. Use the **Knowledge Graph** tab to explore scheme relationships and inspect source documents.
-
-## Rebuild Data and Indexes
-
-Run the project's ingestion, cleaning, chunking, and indexing scripts in the appropriate order when refreshing source data. Build the graph with:
-
-```powershell
-python graph/build_graph.py
-```
-
-The graph is saved to `data/processed/scheme_graph.json`.
-
-## Run Tests
-
-```powershell
-python -m pytest tests -v -o addopts="" -p no:cacheprovider
-```
-
-The current test suite contains 10 passing tests.
-
-## Important Limitations
-
-- Answers depend on the available indexed source documents.
-- Graph relationships currently indicate infrastructure categories mentioned in scheme text; they do not independently establish funding, eligibility, or current scheme status.
-- Verify important eligibility and application details with the relevant government department.
-- The graph is stored locally as JSON and uses NetworkX; this implementation does not require a Neo4j server.
+│
